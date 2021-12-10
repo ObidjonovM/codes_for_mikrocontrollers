@@ -35,10 +35,10 @@ const int CHANNEL = 4;                         // parameter to set Wi-Fi channel
 
 //////////////////////////////////// PIN VALUES //////////////////////////////////////////////////////
 const int gasPin = A0;
-const int relePin = 5;         // D1
 const int btnPin = 4;          // D2
 const int buzzPin = 14;        // D5
-const int SAPS_BTN_PIN = 12;   // D6
+const int relePin = 12;        // D6
+const int SAPS_BTN_PIN = 13;   // D7
 
 /****************************************** VARIABLES *************************************/
 // Authorization variables
@@ -53,9 +53,9 @@ String routerPass = "";
 // HTTP related variables
 int statusCode;
 String httpResp;
+String settingsHttpResp;
 bool loggedIn = false;
 
-int gasLogicCounter = 0;
 String relay = "ON";
 bool gasOn = true;
 int gasVal = 0;
@@ -71,7 +71,6 @@ int delayCounter = 0;
 ESP8266WebServer server(80);           // starting the web server
 
 void setup() {
-  Serial.begin(9600);
   pinMode(relePin, OUTPUT);
   pinMode(btnPin, INPUT);
   pinMode(gasPin, INPUT);
@@ -89,28 +88,24 @@ void setup() {
   fidoDelay(2000);
   WiFi.begin(routerLogin.c_str(), routerPass.c_str());
   fidoDelay(1000);
-  
-  httpResp = sendRequest(HIDDEN_SERVER + SETTINGS_END_POINT, "{\"serial_num\":\"" + SERIAL_NUMBER + "\"}");
-  deviceSettings(httpResp);
+  if (WiFi.status() != WL_CONNECTED) {
+    establishConnection(connReistTrails);
+  }
+  if (WiFi.status() == WL_CONNECTED) {
+    settingsHttpResp = sendRequest(HIDDEN_SERVER + SETTINGS_END_POINT, "{\"serial_num\":\"" + SERIAL_NUMBER + "\"}");
+    deviceSettings(settingsHttpResp);
+  }
 }
 
 void loop() {
   gasSensorLogic();
   startAPAndServer();
-
-  if (delayCounter == NUM_DELAYS) {
-    delayCounter = 0;
-    if (WiFi.status() == WL_CONNECTED) {
-      gasSensorLogic();
-      startAPAndServer();
-      sendRequest(slaveServer + END_POINT, "{\"serial_num\":\"" + SERIAL_NUMBER + "\", \"state\":\"" + relay + "\", \"gas_val\":\"" + gasVal + "\"}");
-    } else {
-      establishConnection(connReistTrails);
-    }
-    fidoDelay(measureDelay);
+  if (WiFi.status() == WL_CONNECTED) {
+    sendRequest(slaveServer + END_POINT, "{\"serial_num\":\"" + SERIAL_NUMBER + "\", \"state\":\"" + relay + "\", \"gas_val\":\"" + gasVal + "\"}");
+  } else {
+    establishConnection(connReistTrails);
   }
-  fidoDelay(MIN_DELAY);
-  delayCounter += 1;
+  fidoDelay(measureDelay);
 }
 
 void deviceSettings(String httpResp) {
@@ -121,7 +116,7 @@ void deviceSettings(String httpResp) {
   String buzz_interval = extractFromJSON(httpResp, "buzz_interval");
   String conn_reist_trails = extractFromJSON(httpResp, "conn_reist_trails");
   if (slave_server != "" && slave_server != "-"){
-    slaveServer =slave_server;
+    slaveServer = slave_server;
   }
   if (max_gas_value != "" && max_gas_value != "-"){
     maxGasVal = max_gas_value.toInt();
@@ -150,11 +145,8 @@ void startAPAndServer() {
       break;
     }
   }
-  Serial.println("sapsCounter - 1");
-  Serial.println(sapsCounter);
+
   if (sapsCounter == 4000) {
-    Serial.println("sapsCounter - 2");
-  Serial.println(sapsCounter);
     setupAccessPoint();
     fidoDelay(100);
     startHTTPServer();
@@ -221,8 +213,9 @@ String extractFromJSON(String respContent, String cmd) {
   }
   
   st_index += cmd.length() + 1;
+  char lastQuoteCmd = respContent[st_index - 1];
   st_index = respContent.indexOf("\"", st_index);
-  if (st_index == -1) {
+  if (st_index == -1 || String(lastQuoteCmd) != "\"") {
     return "";
   }
 
@@ -261,18 +254,6 @@ void setupAccessPoint() {
     apActivated = WiFi.softAP(apLogin, apPass, CHANNEL);
     fidoDelay(10);
   }
-}
-
-bool testWifi() {
-  int c = 0;
-    while ( c < 20 ) {
-      if (WiFi.status() == WL_CONNECTED) {
-        return true;
-      }
-      fidoDelay(500);
-      c++;
-    }
-  return false;
 }
 
 void startHTTPServer() {
