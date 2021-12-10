@@ -21,14 +21,13 @@ const String ROUTER_LOGIN = "DEFAULT";
 const String ROUTER_PASS = "DEFAULT";
 const String HIDDEN_SERVER = "http://157.230.110.88:5000";
 const String END_POINT = "/socket3x/from_device";
+const String SETTINGS_END_POINT = "/socket3x/device_settings";
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 //////////////////////////////////// GENERAL CONSTANTS //////////////////////////////////////////////
 const int MEMORY_SIZE = 512;                   // EEPROM memory size
 const int OFFSET = 0;                          // Offset to start records
 const String STAMP = "FIDOELECTRONICS";        // Stamp to check if the user data was recorded
-const int MIN_DELAY = 5;                      // delay between each iterations
-const int NUM_DELAYS = 200;                    // number of delays before connecting with the cloud
 const int CHANNEL = 4;                         // parameter to set Wi-Fi channel, from 1 to 13
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -52,6 +51,7 @@ String routerPass = "";
 // HTTP related variables
 int statusCode;
 String httpResp;
+String settingsHttpResp;
 String relayLeft = "OFF";
 String relayCenter = "OFF";
 String relayRight = "OFF";
@@ -61,6 +61,8 @@ int btnState = false;
 String slaveServer = HIDDEN_SERVER;
 int measureDelay = 10;
 int connReistTrails = 500;     // trails to reestablish the connection with the server
+int minDelay = 5;
+int numDelays = 200;
 int delayCounter = 0;
 
 
@@ -84,12 +86,19 @@ void setup() {
   digitalWrite(REL_PIN_CENTER, LOW);
   digitalWrite(REL_PIN_RIGHT, LOW);
   fidoDelay(500);
+  if (WiFi.status() != WL_CONNECTED) {
+    establishConnection(connReistTrails);
+  }
+  if (WiFi.status() == WL_CONNECTED) {
+    settingsHttpResp = sendRequest(HIDDEN_SERVER + SETTINGS_END_POINT, "{\"serial_num\":\"" + SERIAL_NUMBER + "\"}");
+    deviceSettings(settingsHttpResp);
+  }
 }
 
 void loop() {
   startAPAndServer();
   resetbtn();
-  if (delayCounter == NUM_DELAYS) {
+  if (delayCounter == numDelays) {
     delayCounter = 0;
     if (WiFi.status() == WL_CONNECTED) {
       startAPAndServer();
@@ -141,12 +150,45 @@ void loop() {
     }
     fidoDelay(measureDelay);
   }
-  fidoDelay(MIN_DELAY);
+  fidoDelay(minDelay);
   delayCounter += 1;
 }
 
+void deviceSettings(String httpResp) {
+  String slave_server = extractFromJSON(httpResp, "slave_server");
+  String measurement_delay = extractFromJSON(httpResp, "measurement_delay");
+  String conn_reist_trails = extractFromJSON(httpResp, "conn_reist_trails");
+  String min_delay = extractFromJSON(httpResp, "min_delay");
+  String num_delays = extractFromJSON(httpResp, "num_delays");
+
+  if (slave_server != "" && slave_server != "-"){
+    slaveServer = slave_server;
+  }
+  if (measurement_delay != "" && measurement_delay != "-"){
+    measureDelay = measurement_delay.toInt();
+  }
+  if (conn_reist_trails != "" && conn_reist_trails != "-") {
+    connReistTrails = conn_reist_trails.toInt();
+  }
+  if (min_delay != "" && min_delay != "-") {
+    minDelay = min_delay.toInt();
+  }
+  if (num_delays != "" && num_delays != "-") {
+    numDelays = num_delays.toInt();
+  }
+}
+
 void startAPAndServer() {
-  if (digitalRead(SAPS_BTN_PIN) == HIGH) {
+  int sapsCounter = 0;
+  
+  while(digitalRead(SAPS_BTN_PIN) == HIGH) {
+    fidoDelay(1);
+    sapsCounter++;
+    if (sapsCounter == 4000) {
+      break;
+    }
+  }
+  if (sapsCounter == 4000) {
     setupAccessPoint();
     fidoDelay(100);
     startHTTPServer();
@@ -160,9 +202,14 @@ void startAPAndServer() {
 void resetbtn() {
   btnState = digitalRead(TURN_BTN_PIN);   // HIGH if button is pressed
   if (btnState == HIGH) {
+    int btnCounter = 0;
     while (btnState == HIGH) {
-      fidoDelay(1);
       btnState = digitalRead(TURN_BTN_PIN);
+      fidoDelay(10);
+      if (btnState == LOW && btnCounter < 20) {
+        btnCounter += 1;
+        btnState = HIGH;
+      }
     }
     if (relayLeft == "OFF" && relayCenter == "OFF" && relayRight == "OFF") {
       digitalWrite(REL_PIN_LEFT, HIGH);
@@ -216,8 +263,9 @@ String extractFromJSON(String respContent, String cmd) {
   }
 
   st_index += cmd.length() + 1;
+  char lastQuoteCmd = respContent[st_index - 1];
   st_index = respContent.indexOf("\"", st_index);
-  if (st_index == -1) {
+  if (st_index == -1 || String(lastQuoteCmd) != "\"") {
     return "";
   }
 
@@ -257,18 +305,6 @@ void setupAccessPoint() {
     apActivated = WiFi.softAP(apLogin, apPass, CHANNEL);
     fidoDelay(10);
   }
-}
-
-bool testWifi() {
-  int c = 0;
-  while ( c < 20 ) {
-    if (WiFi.status() == WL_CONNECTED) {
-      return true;
-    }
-    fidoDelay(500);
-    c++;
-  }
-  return false;
 }
 
 void startHTTPServer() {
