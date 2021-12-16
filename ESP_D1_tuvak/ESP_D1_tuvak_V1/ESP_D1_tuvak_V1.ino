@@ -30,8 +30,6 @@ const String SETTINGS_END_POINT = "/tuvak/device_settings";
 const int MEMORY_SIZE = 512;                   // EEPROM memory size
 const int OFFSET = 0;                          // Offset to start records
 const String STAMP = "FIDOELECTRONICS";        // Stamp to check if the user data was recorded
-const int MIN_DELAY = 5;                      // delay between each iterations
-const int NUM_DELAYS = 200;                    // number of delays before connecting with the cloud
 const int CHANNEL = 4;                         // parameter to set Wi-Fi channel, from 1 to 13
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -66,7 +64,7 @@ String waterPoured = "NO";
 String slaveServer = HIDDEN_SERVER;
 int moistSamples = 50;
 int measureDelay = 1000;
-int pumpOnDelay = 5000;
+int pumpOnDelay = 10000;
 int connReistTrails = 10;     // trails to reestablish the connection with the server
 int delayCounter = 0;
 
@@ -78,13 +76,10 @@ DHTesp dht;
 
 
 void setup() {
-  Serial.begin(9600);
-  Serial.println("Setting up...");
   pinMode(SAPS_BTN_PIN, INPUT);
   pinMode(moistPin, INPUT);
   pinMode(pumpPin, OUTPUT);
   dht.setup(dht11, DHTesp::DHT11);     // D2
-
   fidoDelay(500);
 
   WiFi.disconnect();
@@ -95,57 +90,49 @@ void setup() {
   fidoDelay(2000);
   WiFi.begin(routerLogin.c_str(), routerPass.c_str());
   fidoDelay(1000);
-  
-  settingsHttpResp = sendRequest(HIDDEN_SERVER + SETTINGS_END_POINT, "{\"serial_num\":\"" + SERIAL_NUMBER + "\"}");
-  deviceSettings(settingsHttpResp);
+  if (WiFi.status() != WL_CONNECTED) {
+    establishConnection(connReistTrails);
+  }
+  if (WiFi.status() == WL_CONNECTED) {
+    settingsHttpResp = sendRequest(HIDDEN_SERVER + SETTINGS_END_POINT, "{\"serial_num\":\"" + SERIAL_NUMBER + "\"}");
+    deviceSettings(settingsHttpResp);
+  }
 }
 
 void loop() {
+  startAPAndServer();
   currMoist = getMoistureValue(moistPin, moistSamples, 10);
   fidoDelay(dht.getMinimumSamplingPeriod());
   currHumid = dht.getHumidity();
   currTemp = dht.getTemperature();
   startAPAndServer();
-
-  Serial.print("current moist level = ");
-  Serial.println(currMoist);
-  Serial.print("current temprature = ");
-  Serial.println(currTemp);
-  Serial.print("current air humidity = ");
-  Serial.println(currHumid);
-  Serial.println(delayCounter);
   
   if (WiFi.status() == WL_CONNECTED) {
     startAPAndServer();
-    httpResp = sendRequest(slaveServer + END_POINT, "{\"serial_num\":\"" + SERIAL_NUMBER + "\", \"soil_moist\":\"" + currMoist + "\", \"air_humid\":\"" + currHumid + "\", \"temp\":\"" + currTemp + "\", \"water_poured\":\"" + waterPoured + "\"}");
-    Serial.println("httpResp");
-    Serial.println(httpResp);
+    httpResp = sendRequest(slaveServer + END_POINT, "{\"serial_num\":\"" + SERIAL_NUMBER + "\", \"soil_moist\":" + currMoist + ", \"air_humid\":" + currHumid + ", \"temp\":" + currTemp + ", \"water_poured\":\"" + waterPoured + "\"}");
+
+    String actionRequested = extractFromJSON(httpResp, "action_requested");
+    String actionTaken = extractFromJSON(httpResp, "action_taken");
+
+    if (actionRequested == "ON" && actionTaken == "NO") {
+      digitalWrite(pumpPin, HIGH);
+      fidoDelay(pumpOnDelay);
+      digitalWrite(pumpPin, LOW);
+      waterPoured = "YES";
+    } else {
+      waterPoured = "NO";
+    }
   } else {
     establishConnection(connReistTrails);
   }
   fidoDelay(measureDelay);
-
-  
-//  reqBody = server + "/tuvak?temp=" + String(currTemp) + "&moist=" + String(currMoist) + "&humid=" + String(currHumid);
-//  httpResp = sendRequest(reqBody);
-//  cmd = extractCommand(httpResp);
-//  Serial.print("Command received: ");
-//  Serial.println(cmd);
-//  if (cmd == "suv") {
-//    digitalWrite(pumpPin, HIGH);
-//    Serial.println("NASOS YONDI");
-//    delay(pumpOnDelay);
-//    digitalWrite(pumpPin, LOW);
-//    Serial.println("NASOS O'CHDI");
-//    httpResp = sendRequest(reqBody + "&suv=quydim");
-//  }    
 }
 
 float getMoistureValue(int pinNumber, int numSamples, int measDelay) {
   float sumVal = 0;
   for (int i = 0; i <= numSamples; i++) {
     sumVal += analogRead(pinNumber);
-    delay(measDelay);
+    fidoDelay(measDelay);
   }
   return sumVal / (float) numSamples;
 }
@@ -154,14 +141,23 @@ void deviceSettings(String httpResp) {
   String slave_server = extractFromJSON(httpResp, "slave_server");
   String measurement_delay = extractFromJSON(httpResp, "measurement_delay");
   String conn_reist_trails = extractFromJSON(httpResp, "conn_reist_trails");
+  String pump_on_delay = extractFromJSON(httpResp, "pump_on_delay");
+  String moist_samples = extractFromJSON(httpResp, "moist_samples");
+
   if (slave_server != "" && slave_server != "-"){
-    slaveServer =slave_server;
+    slaveServer = slave_server;
   }
   if (measurement_delay != "" && measurement_delay != "-"){
     measureDelay = measurement_delay.toInt();
   }
   if (conn_reist_trails != "" && conn_reist_trails != "-") {
     connReistTrails = conn_reist_trails.toInt();
+  }
+  if (pump_on_delay != "" && pump_on_delay != "-") {
+    pumpOnDelay = pump_on_delay.toInt();
+  }
+  if (moist_samples != "" && moist_samples != "-") {
+    moistSamples = moist_samples.toInt();
   }
 }
 
@@ -175,11 +171,7 @@ void startAPAndServer() {
       break;
     }
   }
-//  Serial.println("sapsCounter - 1");
-//  Serial.println(sapsCounter);
   if (sapsCounter == 4000) {
-//    Serial.println("sapsCounter - 2");
-//  Serial.println(sapsCounter);
     setupAccessPoint();
     fidoDelay(100);
     startHTTPServer();
@@ -193,7 +185,7 @@ void startAPAndServer() {
 String sendRequest(String url, String json) {
   WiFiClient client;
   HTTPClient http;
-  Serial.println(json);
+
   if (http.begin(client, url)) {
     http.addHeader("Content-Type", "application/json");
     int httpCode = http.POST(json);
@@ -224,8 +216,9 @@ String extractFromJSON(String respContent, String cmd) {
   }
   
   st_index += cmd.length() + 1;
+  char lastQuoteCmd = respContent[st_index - 1];
   st_index = respContent.indexOf("\"", st_index);
-  if (st_index == -1) {
+  if (st_index == -1 || String(lastQuoteCmd) != "\"") {
     return "";
   }
 
@@ -248,7 +241,7 @@ void establishConnection(int numTrails) {
     while (WiFi.status() != WL_CONNECTED) {
       if (trailCounter < numTrails) {
         startAPAndServer();
-        fidoDelay(1000);
+        fidoDelay(500);
         trailCounter++;
       } else {
         break;
@@ -263,18 +256,6 @@ void setupAccessPoint() {
     apActivated = WiFi.softAP(apLogin, apPass, CHANNEL);
     fidoDelay(10);
   }
-}
-
-bool testWifi() {
-  int c = 0;
-    while ( c < 20 ) {
-      if (WiFi.status() == WL_CONNECTED) {
-        return true;
-      }
-      fidoDelay(500);
-      c++;
-    }
-  return false;
 }
 
 void startHTTPServer() {
@@ -524,7 +505,6 @@ String readFromEEPROM(int stPos) {
 
   // reading the field length from the memory
   EEPROM.get(stPos, fieldLen);
-
   // reading the field from the memory
   for (int i = stPos + 1; i <= stPos + fieldLen; i++) {
     EEPROM.get(i, ch);
@@ -532,6 +512,26 @@ String readFromEEPROM(int stPos) {
       result += " ";
     }else {
       result += ch;
+    }
+  }
+  
+  return replaceASCIICode(result);
+}
+
+String replaceASCIICode(String txt) {
+  String result;
+  int idx = 0;
+
+  while (idx < txt.length()) {
+    if (txt[idx] == '%') {
+      String numString = "0x" + String(txt[idx+1]) + String(txt[idx+2]);
+      char ch = (char)(int)strtol(numString.c_str(), NULL, 16);
+      result += ch;
+      idx += 3;
+    } 
+    else {
+      result += txt[idx];
+      idx += 1;
     }
   }
   
