@@ -30,7 +30,6 @@ const int OFFSET = 0;                          // Offset to start records
 const String STAMP = "FIDOELECTRONICS";        // Stamp to check if the user data was recorded
 const String MEASURE_STAMP = "MEASUREMENTS";
 const int CHANNEL = 4;                         // parameter to set Wi-Fi channel, from 1 to 13
-const int R_0 = 993;
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
 //////////////////////////////////// PIN VALUES //////////////////////////////////////////////////////
@@ -57,6 +56,7 @@ int measureDelay;
 int buzzDuration;
 int buzzInterval;
 int connReistTrails;
+int R_0;
 
 // HTTP related variables
 int statusCode;
@@ -91,14 +91,15 @@ void setup() {
   fidoDelay(2000);
   loadCredentials();
   fidoDelay(2000);
+  WiFi.mode(WIFI_STA);
   WiFi.begin(routerLogin.c_str(), routerPass.c_str());
   fidoDelay(2000);
 }
 
 void loop() {
-  gasSensorLogic();
   startAPAndServer();
   if (measureStamp == MEASURE_STAMP) {
+    gasSensorLogic();
     if (WiFi.status() == WL_CONNECTED) {
       digitalWrite(LED_PIN, HIGH);
       getFromDevice();
@@ -124,7 +125,7 @@ void loop() {
 }
 
 float getMethanePPM(){
-   float a0 = analogRead(A0); // get raw reading from sensor
+   float a0 = analogRead(GAS_PIN); // get raw reading from sensor
    float v_o = a0 * 5 / 1023; // convert reading to volts
    float R_S = (5-v_o) * 1000 / v_o; // apply formula for getting RS
    float PPM = pow(R_S/R_0,-2.95) * 1000; //apply formula for getting PPM
@@ -149,6 +150,7 @@ void deviceSettings(String httpResp) {
   String buzz_duration = extractFromJSON(httpResp, "buzz_duration");
   String buzz_interval = extractFromJSON(httpResp, "buzz_interval");
   String conn_reist_trails = extractFromJSON(httpResp, "conn_reist_trails");
+  String r_0 = extractFromJSON(httpResp, "r_0");
   if (slave_server != "" && slave_server != slaveServer){
     slaveServer = slave_server;
   }
@@ -170,6 +172,10 @@ void deviceSettings(String httpResp) {
   }
   if (conn_reist_trails != "" && conn_reist_trails.toInt() != connReistTrails) {
     connReistTrails = conn_reist_trails.toInt();
+    mustWriteEEPROM = true;
+  }
+  if (r_0 != "" && r_0.toInt() != R_0) {
+    R_0 = r_0.toInt();
     mustWriteEEPROM = true;
   }
 }
@@ -495,8 +501,13 @@ void loadCredentials() {
       String buzz_interval = readFromEEPROM(startPos);
       buzzInterval = buzz_interval.toInt();
 
-      // reading routerLogin value
+      // reading R_0 value
       startPos += buzz_interval.length() + 1;
+      String r_0 = readFromEEPROM(startPos);
+      R_0 = r_0.toInt();
+
+      // reading routerLogin value
+      startPos += r_0.length() + 1;
       routerLogin = readFromEEPROM(startPos);
     }else {
       // reading routerLogin value
@@ -599,8 +610,13 @@ void saveCredentials() {
       String buzz_interval = String(buzzInterval);
       writeEEPROM(buzz_interval, startPos);
 
-      // writing routerLogin
+      // writting R_0
       startPos += buzz_interval.length() + 1;
+      String r_0 = String(R_0);
+      writeEEPROM(r_0, startPos);
+
+      // writing routerLogin
+      startPos += r_0.length() + 1;
       writeEEPROM(routerLogin, startPos);
     }else {
       // writing routerLogin
