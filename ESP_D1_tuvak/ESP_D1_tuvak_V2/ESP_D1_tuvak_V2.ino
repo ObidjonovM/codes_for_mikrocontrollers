@@ -82,7 +82,7 @@ void setup() {
   pinMode(pumpPin, OUTPUT);
   dht.setup(dht11, DHTesp::DHT11);     // D2
   fidoDelay(500);
-  Serial.begin(9600);
+
   WiFi.disconnect();
   fidoDelay(3000);
   WiFi.softAPdisconnect(true);
@@ -116,10 +116,7 @@ void loop() {
     }
     fidoDelay(measureDelay);
   }else {
-    Serial.println("WiFi.status()");
-    Serial.println(WiFi.status());
     if (WiFi.status() == WL_CONNECTED) {
-      Serial.println("1111");
       getDeviceSettings();
       measureStamp = MEASURE_STAMP;
       saveCredentials();
