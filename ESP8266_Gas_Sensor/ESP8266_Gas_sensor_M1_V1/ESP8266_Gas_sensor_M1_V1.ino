@@ -9,8 +9,8 @@
 ///////////////////////////////////// UNIQUE CONSTANTS FROM CLOUD //////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-const String SERIAL_NUMBER = "0003213e4080";          // Serial number of the product
-const String AP_LOGIN = "FidoElectronics14";       // Access Point (AP) mode default login
+const String SERIAL_NUMBER = "000322db7e0b";          // Serial number of the product
+const String AP_LOGIN = "FidoElectronics29";       // Access Point (AP) mode default login
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,7 +88,7 @@ void setup() {
   fidoDelay(3000);
   WiFi.mode(WIFI_STA);
   WiFi.begin(routerLogin.c_str(), routerPass.c_str());
-  fidoDelay(290000);                                           //5 minut dan keyin qurilma ishga tushadi
+//  fidoDelay(290000);                                           //5 minut dan keyin qurilma ishga tushadi
 }
 
 void loop() {
@@ -129,13 +129,8 @@ float getMethanePPM() {
   float a0 = analogRead(GAS_PIN); // get raw reading from sensor
   float v_o = a0 * 5 / 1023; // convert reading to volts
   float R_S = (5 - v_o) * 1000 / v_o; // apply formula for getting RS
-  float PPM;
-  if (R_S < 0) {
-    R_S = 0;
-    PPM = 2147483647;
-  } else {
-    PPM = pow(R_S / R_0, -2.95) * 1000; //apply formula for getting PPM
-  }
+  float PPM = pow(R_S / R_0, -2.95) * 1000; //apply formula for getting PPM
+
   return PPM; // return PPM value to calling function
 }
 
@@ -319,25 +314,6 @@ void startHTTPServer() {
   server.on("/", handleRouter);
   fidoDelay(10);
   server.begin();
-}
-
-void writeScanNetworks() {
-  int n = WiFi.scanNetworks();
-  ssidList = "";
-  for (int i = 0; i < n; ++i) {
-    // Print SSID and RSSI for each network found
-    ssidList += "<div class='div-ssid' onclick='fillSsid(this)'>";
-    ssidList += "<span>";
-    ssidList += WiFi.SSID(i);
-    ssidList += "</span>";
-    ssidList += "<span style='position: absolute; right:0.3em;'>";
-    ssidList += (WiFi.encryptionType(i) == ENC_TYPE_NONE) ? " " : "<img id='lock' width='16px' src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABoAAAAaCAYAAACpSkzOAAAABmJLR0QA/wD/AP+gvaeTAAABHUlEQVRIic2VQWrCQBSGP0VSEKHg2lD1HAq9Rem2duei10i9hmeQUnAtuHZT6NboQrrSgN0YFxp4iHnjzETxwYPAfPN/mUkyAft6Aj6BGbAGNsfrAdB0yDtbPSAB0pxOgDdfySuwUyRZ74AXV0kd+BNhU+AZqB67C0zE+Ap4dBF9iJBfoHaGqQI/guu7iL5FwLvC9QQ3chEtRUBL4dqCm7uI/kVAoHAPgtvKgdKFotRijg172wo4nAALzN9OXsdAhL7dRB6C0440kc9KTnupPaxUGbOucpFh1xKNgAYQAl8+N2Ha94ZgQxPvs6Ig59q6TCsaC3Zs4n3fumy+kb3ZW1fxnN/hwoPzLj7YRYGeWBMNCxSpWQGHUzemgN/EHtOMriKlrZeFAAAAAElFTkSuQmCC'>";
-    ssidList += " (";
-    ssidList += WiFi.RSSI(i);
-    ssidList += ")";
-    ssidList += "</span>";
-    ssidList += "</div>";
-  }
 }
 
 void handleRouter() {
@@ -581,6 +557,41 @@ String readFromEEPROM(int stPos) {
   return result;
 }
 
+void writeScanNetworks() {
+  int n = WiFi.scanNetworks();
+  ssidList = "";
+  for (int i = 0; i < n; ++i) {
+    // Print SSID and RSSI for each network found
+    ssidList += "<div class='div-ssid must-hover' onclick='showInfo(this)'>";
+    ssidList += "<span>";
+    ssidList += WiFi.SSID(i);
+    ssidList += "</span>";
+    ssidList += "<span style='position: absolute; right:0.3em;'>";
+    if (WiFi.encryptionType(i) != ENC_TYPE_NONE) {
+      ssidList += "<img width='16px' src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABoAAAAaCAYAAACpSkzOAAAABmJLR0QA/wD/AP+gvaeTAAABHUlEQVRIic2VQWrCQBSGP0VSEKHg2lD1HAq9Rem2duei10i9hmeQUnAtuHZT6NboQrrSgN0YFxp4iHnjzETxwYPAfPN/mUkyAft6Aj6BGbAGNsfrAdB0yDtbPSAB0pxOgDdfySuwUyRZ74AXV0kd+BNhU+AZqB67C0zE+Ap4dBF9iJBfoHaGqQI/guu7iL5FwLvC9QQ3chEtRUBL4dqCm7uI/kVAoHAPgtvKgdKFotRijg172wo4nAALzN9OXsdAhL7dRB6C0440kc9KTnupPaxUGbOucpFh1xKNgAYQAl8+N2Ha94ZgQxPvs6Ig59q6TCsaC3Zs4n3fumy+kb3ZW1fxnN/hwoPzLj7YRYGeWBMNCxSpWQGHUzemgN/EHtOMriKlrZeFAAAAAElFTkSuQmCC'>";
+    }
+    ssidList += " (";
+    ssidList += WiFi.RSSI(i);
+    ssidList += ")";
+    ssidList += "</span>";
+    ssidList += "<form method=\"POST\">";
+    ssidList += "<input style=\"display: none;\" value = \""+WiFi.SSID(i)+"\" type=\"text\" name=\"ssid\">";
+    ssidList += "<div class = \"hide must-show\">";
+    if (WiFi.encryptionType(i) != ENC_TYPE_NONE) {
+      ssidList += "<label for=\"password\">Ключ безопасности сети:</label>";
+      ssidList += "<div class = \"parent-button-hide-show\">";
+      ssidList += "<input class = \"password\" type=\"password\" name=\"routerPass\" placeholder = \"Введите ключ безопасности сети...\" required  onclick=\"event.stopPropagation();\">";
+      ssidList += "<input type=\"button\" class = \"button-hide-show show-button\" onclick = \"showButtonFunction(this)\" value = \"показать\">";
+      ssidList += "<input type=\"button\" class = \"button-hide-show hide-button hide\" onclick = \"hideButtonFunction(this)\" value=\"скрывать\">";
+      ssidList += "</div>";
+    }
+    ssidList += "<input class=\"submit\" type=\"submit\" value=\"Подключиться\" onclick=\"event.stopPropagation();\">";
+    ssidList += "</div>";
+    ssidList += "</form>";
+    ssidList += "</div>";
+  }
+}
+
 //////////////////////// HTML content functions /////////////////////////////////////
 String css() {
   String content = "<style>";
@@ -618,25 +629,21 @@ String css() {
 
   content += ".div-ssid {";
   content += "position : relative;";
-  content += "padding: 0px 0.3em;";
+  content += "padding: 0.3em 0.3em;";
   content += "}";
 
   content += ".div-ssid > :first-child {";
   content += "text-decoration: underline;";
-  content += "color: -webkit-link;";
+  content += "color: blue;";
   content += "}";
 
-  content += ".div-ssid:hover {";
+  content += ".must-hover:hover {";
   content += "background-color : rgba(0,0,0, 0.05);";
   content += "cursor : pointer;";
   content += "}";
 
-  content += ".div-ssid:hover :first-child {";
-  content += "color: purple;";
-  content += "}";
-
-  content += ".div-ssid:active :first-child {";
-  content += "color: -webkit-activelink;";
+  content += ".selected-ssid {";
+  content += "background-color : rgba(0,0,0, 0.2);";
   content += "}";
 
   content += "input[type=text], input[type=password] {";
@@ -649,18 +656,8 @@ String css() {
   content += "}";
 
   content += "input[type=submit] {";
-  content += "background-color: #374a62;";
-  content += "color: white;";
-  content += "padding: 14px 20px;";
-  content += "margin: 8px 0;";
-  content += "border: 2px solid #374a62;";
+  content += "padding: 0.5em;";
   content += "cursor: pointer;";
-  content += "width: 100%;";
-  content += "}";
-
-  content += "input[type=submit]:hover {";
-  content += "background-color: #232F3E;";
-  content += "transition: all .3s;";
   content += "}";
 
   content += ".container {";
@@ -695,31 +692,43 @@ String css() {
 
 String javaScript() {
   String content = "<script>";
-  content += "var showButton = document.getElementById('showButton');\n";
-  content += "var hideButton = document.getElementById('hideButton');\n";
-  content += "var password = document.getElementById('password');\n";
   content += "var ssid = document.getElementById('ssid');\n";
+  content += "var must_show = document.querySelectorAll('.must-show');\n";
+  content += "var div_ssid = document.querySelectorAll('.div-ssid');\n";
   if (ssidList == "") {
     content += "ssid.focus();\n";
   }
-  content += "function showButtonFunction(){\n";
-  content += "password.type = 'text';";
-  content += "showButton.style.display = 'none';";
-  content += "hideButton.style.display = 'inline-block';";
+  content += "function showButtonFunction(e){\n";
+  content += "e.parentNode.querySelector('.password').type = 'text';\n";
+  content += "e.style.display = 'none';\n";
+  content += "e.parentNode.querySelector('.hide-button').style.display = 'inline-block';\n";
+  content += "event.stopPropagation();\n";
   content += "};\n";
-  content += "function hideButtonFunction(){\n";
-  content += "password.type = 'password';";
-  content += "hideButton.style.display = 'none';";
-  content += "showButton.style.display = 'inline-block';";
+  content += "function hideButtonFunction(e){\n";
+  content += "e.parentNode.querySelector('.password').type = 'password';\n";
+  content += "e.style.display = 'none';\n";
+  content += "e.parentNode.querySelector('.show-button').style.display = 'inline-block';\n";
+  content += "event.stopPropagation();\n";
   content += "};\n";
-  content += "function fillSsid(v){\n";
-  content += "if(v.childNodes[1].childNodes[0].id != 'lock'){";
-  content += "password.setAttribute('disabled','')";
-  content += "}else {";
-  content += "password.focus();";
-  content += "password.removeAttribute('disabled')";
-  content += "}";
-  content += "ssid.value = v.childNodes[0].innerText;";
+  content += "function showInfo(e){\n";
+  content += "for (let i =0; i < div_ssid.length; i++) {\n";
+  content += "if(div_ssid[i] == e){\n";
+  content += "div_ssid[i].classList.add('selected-ssid');\n";
+  content += "div_ssid[i].classList.remove('must-hover');\n";
+  content += "must_show[i].classList.remove('hide');\n";
+  content += "} else {\n";
+  content += "div_ssid[i].classList.remove('selected-ssid');\n";
+  content += "div_ssid[i].classList.add('must-hover');\n";
+  content += "must_show[i].classList.add('hide');\n";
+  content += "div_ssid[i].querySelector('form').reset();\n";
+  content += "};\n";
+  content += "};\n";
+  content += "let sel_must_show = e.querySelector('.must-show');\n";
+  content += "if(sel_must_show.querySelector('.password') != null){\n";
+  content += "sel_must_show.querySelector('.password').focus();\n";
+  content += "} else {\n";
+  content += "sel_must_show.querySelector('.submit').focus();\n";
+  content += "};\n";
   content += "};\n";
   content += "</script>";
   return content;
@@ -743,19 +752,19 @@ String routerHTML() {
     content += ssidList;
     content += "</div>";
   }else {
-    content += "<p class = 'comment'>Введите имя сети(SSID роутера) и пароль для подключения вашего устройства к интернету:</p>";
+    content += "<p class = 'comment'>Введите имя сети(SSID роутера) и ключ безопасности сети для подключения вашего устройства к интернету:</p>";
+    content += "<form method=\"POST\">";
+    content += "<label for=\"login\">Имя сети(SSID):</label>";
+    content += "<input id = \"ssid\" type=\"text\" name=\"ssid\" placeholder = \"Введите имя(SSID) для сети...\" required>";
+    content += "<label for=\"password\">Ключ безопасности сети:</label>";
+    content += "<div class = \"parent-button-hide-show\">";
+    content += "<input class = \"password\" type=\"password\" name=\"routerPass\" placeholder = \"Введите ключ безопасности сети...\" required>";
+    content += "<input type=\"button\" class = \"button-hide-show show-button\" onclick = \"showButtonFunction(this)\" value = \"показать\">";
+    content += "<input type=\"button\" class = \"button-hide-show hide-button hide\" onclick = \"hideButtonFunction(this)\" value=\"скрывать\">";
+    content += "</div>";
+    content += "<input class=\"submit\" type=\"submit\" value=\"Подключиться\">";
+    content += "</form>";
   }
-  content += "<form method=\"POST\">";
-  content += "<label for=\"login\">Имя сети(SSID):</label>";
-  content += "<input id = \"ssid\" type=\"text\" name=\"ssid\" placeholder = \"Введите SSID вашего Wi-Fi роутера...\">";
-  content += "<label for=\"password\">Пароль:</label>";
-  content += "<div class = \"parent-button-hide-show\">";
-  content += "<input id = \"password\" type=\"password\" name=\"routerPass\" placeholder = \"Введите пароль вашего Wi-Fi роутера...\">";
-  content += "<input type=\"button\" id = \"showButton\" class = \"button-hide-show\" onclick = \"showButtonFunction()\" value = \"показать\">";
-  content += "<input type=\"button\" id = \"hideButton\" class = \"button-hide-show hide\" onclick = \"hideButtonFunction()\" value=\"скрывать\">";
-  content += "</div>";
-  content += "<input type=\"submit\" value=\"Сохранить\">";
-  content += "</form>";
   content += "</div>";
   content += javaScript();
   content += "</body>";
