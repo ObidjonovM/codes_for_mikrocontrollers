@@ -1,7 +1,10 @@
+#include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
 #include <ESP8266WebServer.h>
 #include <ESP_EEPROM.h>
+
+#define NOTE_A7 3520
 
 
 /*****************************************  CONSTANTS    *******************************/
@@ -505,7 +508,6 @@ void setup() {
   pinMode(BUZZ_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
   digitalWrite(REL_PIN, LOW);
-  digitalWrite(BUZZ_PIN, LOW);
   fidoDelay(1000);
 
   WiFi.disconnect();
@@ -634,9 +636,9 @@ void gasSensorLogic() {
       gasOn = true;
       relay = "ON";
     } else {
-      digitalWrite(BUZZ_PIN, HIGH);
+      tone(BUZZ_PIN, NOTE_A7);
       fidoDelay(buzzDuration);
-      digitalWrite(BUZZ_PIN, LOW);
+      noTone(BUZZ_PIN);
       fidoDelay(buzzInterval);
     }
   }
