@@ -10,23 +10,24 @@
 ///////////////////////////////////// UNIQUE CONSTANTS FROM CLOUD //////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-const String DEVICE_NAME = "socket_3x";          // Device name of the product
+const String DEVICE_NAME = "socket_3x";               // Device name of the product
 const String SERIAL_NUMBER = "001022ae5e20";          // Serial number of the product
-const String AP_LOGIN = "FidoElectronics30";       // Access Point (AP) mode default login
+const bool ACTIONS = true;                            // Actions of the product
+const String AP_LOGIN = "FidoElectronics30";          // Access Point (AP) mode default login
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 const String ROUTER_PASS = "DEFAULT";
-const String HIDDEN_SERVER = "http://10.50.50.156:5000";
+const String PB_SERVER = "http://10.50.50.157:5000";
 const String END_POINT = "/from_device";
-const String SETTINGS_END_POINT = "/device_settings";
+const String SETTINGS_END_POINT = "/products/get_device_settings";
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 //////////////////////////////////// GENERAL CONSTANTS //////////////////////////////////////////////
 const int MEMORY_SIZE = 512;                   // EEPROM memory size
 const int OFFSET = 0;                          // Offset to start records
 const String STAMP = "FIDOELECTRONICS";        // Stamp to check if the user data was recorded
-const String MEASURE_STAMP = "MEASUREMENTS";
+const String SETTINGS_STAMP = "SETTINGS_STAMP";
 const int CHANNEL = 4;                         // parameter to set Wi-Fi channel, from 1 to 13
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -41,15 +42,12 @@ const int REL_PIN2 = 13;           // D7
 /****************************************** VARIABLES *************************************/
 // Authorization variables
 String stamp = "";
-String measureStamp = "";
+String settingsStamp = "";
 String apLogin = "";
 String routerLogin = "";
 String routerPass = "";
 String slaveServer = "";
-int measureDelay;
-int connReistTrails;
-int minDelay;
-int numDelays;
+
 
 // HTTP related variables
 int statusCode;
@@ -65,6 +63,10 @@ bool mustWriteEEPROM = false;
 bool wasConnected = false;
 int btnState = false;
 int delayCounter = 0;
+int measureDelay = 10;
+int connReistTrails = 500;
+int minDelay = 5;
+int numDelays = 200;
 
 
 ESP8266WebServer server(80);           // starting the web server
@@ -356,37 +358,17 @@ void loadCredentials() {
     startPos += stamp.length() + 1;
     apLogin = readFromEEPROM(startPos);
 
-    // reading measureStamp value
+    // reading settingsStamp value
     startPos += apLogin.length() + 1;
-    measureStamp = readFromEEPROM(startPos);
+    settingsStamp = readFromEEPROM(startPos);
 
-    if (measureStamp == MEASURE_STAMP) {
+    if (settingsStamp == SETTINGS_STAMP) {
       // reading slaveServer value
-      startPos += measureStamp.length() + 1;
+      startPos += settingsStamp.length() + 1;
       slaveServer = readFromEEPROM(startPos);
 
-      // reading measureDelay value
-      startPos += slaveServer.length() + 1;
-      String measure_delay = readFromEEPROM(startPos);
-      measureDelay = measure_delay.toInt();
-
-      // reading connReistTrails value
-      startPos += measure_delay.length() + 1;
-      String conn_reist_trails = readFromEEPROM(startPos);
-      connReistTrails = conn_reist_trails.toInt();
-
-      // reading minDelay value
-      startPos += conn_reist_trails.length() + 1;
-      String min_delay = readFromEEPROM(startPos);
-      minDelay = min_delay.toInt();
-
-      // reading numDelays value
-      startPos += min_delay.length() + 1;
-      String num_delays = readFromEEPROM(startPos);
-      numDelays = num_delays.toInt();
-
       // reading routerLogin value
-      startPos += num_delays.length() + 1;
+      startPos += slaveServer.length() + 1;
       routerLogin = readFromEEPROM(startPos);
 
     } else {
@@ -433,37 +415,17 @@ void saveCredentials() {
   startPos += stamp.length() + 1;
   writeEEPROM(apLogin, startPos);
 
-  if (measureStamp == MEASURE_STAMP) {
-    // writting measureStamp
+  if (settingsStamp == SETTINGS_STAMP) {
+    // writting settingsStamp
     startPos += apLogin.length() + 1;
-    writeEEPROM(measureStamp, startPos);
+    writeEEPROM(settingsStamp, startPos);
 
     // writting slaveServer
-    startPos += measureStamp.length() + 1;
+    startPos += settingsStamp.length() + 1;
     writeEEPROM(slaveServer, startPos);
 
-    // writting measureDelay
-    startPos += slaveServer.length() + 1;
-    String measure_delay = String(measureDelay);
-    writeEEPROM(measure_delay, startPos);
-
-    // writting connReistTrails
-    startPos += measure_delay.length() + 1;
-    String conn_reist_trails = String(connReistTrails);
-    writeEEPROM(conn_reist_trails, startPos);
-
-    // writting minDelay
-    startPos += conn_reist_trails.length() + 1;
-    String min_delay = String(minDelay);
-    writeEEPROM(min_delay, startPos);
-
-    // writting numDelays
-    startPos += min_delay.length() + 1;
-    String num_delays = String(numDelays);
-    writeEEPROM(num_delays, startPos);
-
     // writing routerLogin
-    startPos += num_delays.length() + 1;
+    startPos += slaveServer.length() + 1;
     writeEEPROM(routerLogin, startPos);
   } else {
     // writing routerLogin
@@ -667,6 +629,7 @@ void getFromDevice() {
   httpResp = sendRequest(slaveServer + END_POINT, 
                       "{\"device_name\":\"" + DEVICE_NAME + "\", " +
                       +"\"serial_num\":\"" + SERIAL_NUMBER + "\", " +
+                      +"\"actions\":" + ACTIONS + ", " +
                       +"\"states\":{" +
                           +"\"action_states\":[" +
                             +"\"" + relay0 + "\", " +
@@ -674,11 +637,7 @@ void getFromDevice() {
                             +"\"" + relay2 + "\"" +
                           +"]" +
                       +"}, " +
-                      +"\"slave_server\":\"" + slaveServer + "\", " +
-                      +"\"measurement_delay\":\"" + measureDelay + "\", " +
-                      +"\"conn_reist_trails\":\"" + connReistTrails + "\", " +
-                      +"\"min_delay\":\"" + minDelay + "\", " +
-                      +"\"num_delays\":\"" + numDelays + "\"}");
+                      +"\"slave_server\":\"" + slaveServer + "\"}");
       
   startAPAndServer();
   resetbtn();
@@ -720,37 +679,16 @@ void getFromDevice() {
 
 void deviceSettings(String httpResp) {
   String slave_server = extractFromJSON(httpResp, "slave_server");
-  String measurement_delay = extractFromJSON(httpResp, "measurement_delay");
-  String conn_reist_trails = extractFromJSON(httpResp, "conn_reist_trails");
-  String min_delay = extractFromJSON(httpResp, "min_delay");
-  String num_delays = extractFromJSON(httpResp, "num_delays");
-  String r_0 = extractFromJSON(httpResp, "r_0");
+
   if (slave_server != "" && slave_server != slaveServer) {
     slaveServer = slave_server;
-    mustWriteEEPROM = true;
-  }
-  if (measurement_delay != "" && measurement_delay.toInt() != measureDelay) {
-    measureDelay = measurement_delay.toInt();
-    mustWriteEEPROM = true;
-  }
-  if (conn_reist_trails != "" && conn_reist_trails.toInt() != connReistTrails) {
-    connReistTrails = conn_reist_trails.toInt();
-    mustWriteEEPROM = true;
-  }
-  if (min_delay != "" && min_delay.toInt() != minDelay) {
-    minDelay = min_delay.toInt();
-    mustWriteEEPROM = true;
-  }
-  if (num_delays != "" && num_delays.toInt() != numDelays) {
-    numDelays = num_delays.toInt();
     mustWriteEEPROM = true;
   }
 }
 
 void getDeviceSettings() {
-  settingsHttpResp = sendRequest(HIDDEN_SERVER + SETTINGS_END_POINT, 
-                              "{\"serial_num\":\"" + SERIAL_NUMBER + "\", " + 
-                              +"\"device_name\":\"" + DEVICE_NAME + "\"}");
+  settingsHttpResp = sendRequest(PB_SERVER + SETTINGS_END_POINT, 
+                              "{\"serial_num\":\"" + SERIAL_NUMBER + "\"}");
   deviceSettings(settingsHttpResp);
 }
 
@@ -770,7 +708,7 @@ void establishConnection(int numTrails) {
 
 void loop() {
   startAPAndServer();
-  if (measureStamp == MEASURE_STAMP) {
+  if (settingsStamp == SETTINGS_STAMP) {
     resetbtn();
     if (delayCounter == numDelays) {
       delayCounter = 0;
@@ -799,7 +737,7 @@ void loop() {
     if (WiFi.status() == WL_CONNECTED) {
       getDeviceSettings();
       if (mustWriteEEPROM == true) {
-        measureStamp = MEASURE_STAMP;
+        settingsStamp = SETTINGS_STAMP;
         saveCredentials();
         ESP.reset();
       }
