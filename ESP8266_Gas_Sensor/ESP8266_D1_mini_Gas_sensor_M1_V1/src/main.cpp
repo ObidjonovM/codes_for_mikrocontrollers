@@ -12,22 +12,24 @@
 ///////////////////////////////////// UNIQUE CONSTANTS FROM CLOUD //////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+const String DEVICE_NAME = "gas_sensor";              // Device name of the product
 const String SERIAL_NUMBER = "000322db7e0b";          // Serial number of the product
-const String AP_LOGIN = "FidoElectronics29";       // Access Point (AP) mode default login
+const bool ACTIONS = false;                           // Actions of the product
+const String AP_LOGIN = "FidoElectronics29";          // Access Point (AP) mode default login
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 const String ROUTER_PASS = "DEFAULT";
-const String HIDDEN_SERVER = "http://157.230.110.88:5000";
-const String END_POINT = "/gas_sensor/from_device";
-const String SETTINGS_END_POINT = "/gas_sensor/device_settings";
+const String PB_SERVER = "http://10.50.50.157:5000";
+const String END_POINT = "/from_device";
+const String SETTINGS_END_POINT = "/products/get_device_settings";
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 //////////////////////////////////// GENERAL CONSTANTS //////////////////////////////////////////////
 const int MEMORY_SIZE = 512;                   // EEPROM memory size
 const int OFFSET = 0;                          // Offset to start records
 const String STAMP = "FIDOELECTRONICS";        // Stamp to check if the user data was recorded
-const String MEASURE_STAMP = "MEASUREMENTS";
+const String SETTINGS_STAMP = "SETTINGS_STAMP";
 const int CHANNEL = 4;                         // parameter to set Wi-Fi channel, from 1 to 13
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -42,17 +44,11 @@ const int SAPS_BTN_PIN = 13;    // D7
 /****************************************** VARIABLES *************************************/
 // Authorization variables
 String stamp = "";
-String measureStamp = "";
+String settingsStamp = "";
 String apLogin = "";
 String routerLogin = "";
 String routerPass = "";
 String slaveServer = "";
-float maxGasVal;
-int measureDelay;
-int buzzDuration;
-int buzzInterval;
-int connReistTrails;
-int R_0;
 
 // HTTP related variables
 int statusCode;
@@ -60,13 +56,19 @@ String httpResp;
 String ssidList;
 String settingsHttpResp;
 bool loggedIn = false;
-bool mustWriteEEPROM = false;
-bool wasConnected = false;
 
 String relay = "OFF";
+bool mustWriteEEPROM = false;
+bool wasConnected = false;
 bool gasOn = false;
 float gasVal = 0;
 int delayCounter = 0;
+int measureDelay = 1000;
+int buzzDuration = 100;
+int buzzInterval = 1000;
+int connReistTrails = 10;
+float maxGasVal = 0.10;
+int R_0 = 1029;
 
 
 ESP8266WebServer server(80);           // starting the web server
@@ -358,47 +360,17 @@ void loadCredentials() {
     startPos += stamp.length() + 1;
     apLogin = readFromEEPROM(startPos);
 
-    // reading measureStamp value
+    // reading settingsStamp value
     startPos += apLogin.length() + 1;
-    measureStamp = readFromEEPROM(startPos);
+    settingsStamp = readFromEEPROM(startPos);
 
-    if (measureStamp == MEASURE_STAMP) {
+    if (settingsStamp == SETTINGS_STAMP) {
       // reading slaveServer value
-      startPos += measureStamp.length() + 1;
+      startPos += settingsStamp.length() + 1;
       slaveServer = readFromEEPROM(startPos);
 
-      // reading maxGasVal value
-      startPos += slaveServer.length() + 1;
-      String max_gas_val = readFromEEPROM(startPos);
-      maxGasVal = max_gas_val.toFloat();
-
-      // reading measureDelay value
-      startPos += max_gas_val.length() + 1;
-      String measure_delay = readFromEEPROM(startPos);
-      measureDelay = measure_delay.toInt();
-
-      // reading connReistTrails value
-      startPos += measure_delay.length() + 1;
-      String conn_reist_trails = readFromEEPROM(startPos);
-      connReistTrails = conn_reist_trails.toInt();
-
-      // reading buzzDuration value
-      startPos += conn_reist_trails.length() + 1;
-      String buzz_duration = readFromEEPROM(startPos);
-      buzzDuration = buzz_duration.toInt();
-
-      // reading buzzInterval value
-      startPos += buzz_duration.length() + 1;
-      String buzz_interval = readFromEEPROM(startPos);
-      buzzInterval = buzz_interval.toInt();
-
-      // reading R_0 value
-      startPos += buzz_interval.length() + 1;
-      String r_0 = readFromEEPROM(startPos);
-      R_0 = r_0.toInt();
-
       // reading routerLogin value
-      startPos += r_0.length() + 1;
+      startPos += slaveServer.length() + 1;
       routerLogin = readFromEEPROM(startPos);
     } else {
       // reading routerLogin value
@@ -444,47 +416,17 @@ void saveCredentials() {
   startPos += stamp.length() + 1;
   writeEEPROM(apLogin, startPos);
 
-  if (measureStamp == MEASURE_STAMP) {
-    // writting measureStamp
+  if (settingsStamp == SETTINGS_STAMP) {
+    // writting settingsStamp
     startPos += apLogin.length() + 1;
-    writeEEPROM(measureStamp, startPos);
+    writeEEPROM(settingsStamp, startPos);
 
     // writting slaveServer
-    startPos += measureStamp.length() + 1;
+    startPos += settingsStamp.length() + 1;
     writeEEPROM(slaveServer, startPos);
 
-    // writting maxGasVal
-    startPos += slaveServer.length() + 1;
-    String max_gas_val = String(maxGasVal);
-    writeEEPROM(max_gas_val, startPos);
-
-    // writting measureDelay
-    startPos += max_gas_val.length() + 1;
-    String measure_delay = String(measureDelay);
-    writeEEPROM(measure_delay, startPos);
-
-    // writting connReistTrails
-    startPos += measure_delay.length() + 1;
-    String conn_reist_trails = String(connReistTrails);
-    writeEEPROM(conn_reist_trails, startPos);
-
-    // writting buzzDuration
-    startPos += conn_reist_trails.length() + 1;
-    String buzz_duration = String(buzzDuration);
-    writeEEPROM(buzz_duration, startPos);
-
-    // writting buzzInterval
-    startPos += buzz_duration.length() + 1;
-    String buzz_interval = String(buzzInterval);
-    writeEEPROM(buzz_interval, startPos);
-
-    // writting R_0
-    startPos += buzz_interval.length() + 1;
-    String r_0 = String(R_0);
-    writeEEPROM(r_0, startPos);
-
     // writing routerLogin
-    startPos += r_0.length() + 1;
+    startPos += slaveServer.length() + 1;
     writeEEPROM(routerLogin, startPos);
   } else {
     // writing routerLogin
@@ -511,7 +453,7 @@ void setup() {
   fidoDelay(1000);
 
   WiFi.disconnect();
-  fidoDelay(3000);
+  fidoDelay(2000);
   WiFi.softAPdisconnect(true);
   fidoDelay(3000);
   loadCredentials();
@@ -598,6 +540,7 @@ void startAPAndServer() {
     fidoDelay(1);
     sapsCounter++;
     if (sapsCounter == 4000) {
+      digitalWrite(LED_PIN, LOW);
       break;
     }
   }
@@ -683,57 +626,35 @@ String extractFromJSON(String respContent, String cmd) {
 }
 
 void getFromDevice() {
-  httpResp = sendRequest(slaveServer + END_POINT, "{\"serial_num\":\"" + SERIAL_NUMBER + "\", \"state\":\"" + relay + "\"," +
-                         +" \"gas_val\":\"" + gasVal + "\", \"max_gas_value\":\"" + maxGasVal + "\", \"slave_server\":\"" + slaveServer + "\", \"measurement_delay\":\"" + measureDelay + "\"," +
-                         +" \"conn_reist_trails\":\"" + connReistTrails + "\", \"buzz_duration\":\"" + buzzDuration + "\", \"buzz_interval\":\"" + buzzInterval + "\", \"R_0\":\"" + R_0 + "\"}");
-
-  String resetRequested = extractFromJSON(httpResp, "reset_requested");
-  String resetTaken = extractFromJSON(httpResp, "reset_taken");
-
-  if (resetRequested == "ON" && resetTaken == "NO") {
-    ESP.reset();
-  }
+  httpResp = sendRequest(slaveServer + END_POINT, 
+                        "{\"device_name\":\"" + DEVICE_NAME + "\", " +
+                        +"\"serial_num\":\"" + SERIAL_NUMBER + "\", " +
+                        +"\"actions\":" + ACTIONS + ", " +
+                        +"\"states\":{" +
+                          +"\"action_states\":[" +
+                            +"\"" + relay + "\"" +
+                          +"]" +
+                        +"}, " +
+                        +"\"measurements\":{" +
+                          +"\"gas_value\":[" +
+                            +"\"" + gasVal + "\"" +
+                          +"]" +
+                        +"}, " +
+                         +"\"slave_server\":\"" + slaveServer + "\"}");
 }
 
 void deviceSettings(String httpResp) {
   String slave_server = extractFromJSON(httpResp, "slave_server");
-  String max_gas_value = extractFromJSON(httpResp, "max_gas_value");
-  String measurement_delay = extractFromJSON(httpResp, "measurement_delay");
-  String buzz_duration = extractFromJSON(httpResp, "buzz_duration");
-  String buzz_interval = extractFromJSON(httpResp, "buzz_interval");
-  String conn_reist_trails = extractFromJSON(httpResp, "conn_reist_trails");
-  String r_0 = extractFromJSON(httpResp, "r_0");
+
   if (slave_server != "" && slave_server != slaveServer) {
     slaveServer = slave_server;
-  }
-  if (max_gas_value != "" && max_gas_value.toFloat() != maxGasVal) {
-    maxGasVal = max_gas_value.toFloat();
-    mustWriteEEPROM = true;
-  }
-  if (measurement_delay != "" && measurement_delay.toInt() != measureDelay) {
-    measureDelay = measurement_delay.toInt();
-    mustWriteEEPROM = true;
-  }
-  if (buzz_duration != "" && buzz_duration.toInt() != buzzDuration) {
-    buzzDuration = buzz_duration.toInt();
-    mustWriteEEPROM = true;
-  }
-  if (buzz_interval != "" && buzz_interval.toInt() != buzzInterval) {
-    buzzInterval = buzz_interval.toInt();
-    mustWriteEEPROM = true;
-  }
-  if (conn_reist_trails != "" && conn_reist_trails.toInt() != connReistTrails) {
-    connReistTrails = conn_reist_trails.toInt();
-    mustWriteEEPROM = true;
-  }
-  if (r_0 != "" && r_0.toInt() != R_0) {
-    R_0 = r_0.toInt();
     mustWriteEEPROM = true;
   }
 }
 
 void getDeviceSettings() {
-  settingsHttpResp = sendRequest(HIDDEN_SERVER + SETTINGS_END_POINT, "{\"serial_num\":\"" + SERIAL_NUMBER + "\"}");
+  settingsHttpResp = sendRequest(PB_SERVER + SETTINGS_END_POINT, 
+                                "{\"serial_num\":\"" + SERIAL_NUMBER + "\"}");
   deviceSettings(settingsHttpResp);
 }
 
@@ -753,7 +674,7 @@ void establishConnection(int numTrails) {
 
 void loop() {
   startAPAndServer();
-  if (measureStamp == MEASURE_STAMP) {
+  if (settingsStamp == SETTINGS_STAMP) {
     gasSensorLogic();
     if (WiFi.status() == WL_CONNECTED) {
       digitalWrite(LED_PIN, HIGH);
@@ -777,7 +698,7 @@ void loop() {
     if (WiFi.status() == WL_CONNECTED) {
       getDeviceSettings();
       if (mustWriteEEPROM == true) {
-        measureStamp = MEASURE_STAMP;
+        settingsStamp = SETTINGS_STAMP;
         saveCredentials();
         ESP.reset();
       }
