@@ -36,8 +36,8 @@ const int SAPS_BTN_PIN = 5;        // D1
 const int TURN_BTN_PIN = 4;        // D2
 const int LED_PIN = 0;             // D3
 const int REL_PIN0 = 14;           // D5
-const int REL_PIN1 = 12;           // D6
-const int REL_PIN2 = 13;           // D7
+const int REL_PIN1 = 13;           // D7
+const int REL_PIN2 = 12;           // D6
 
 /****************************************** VARIABLES *************************************/
 // Authorization variables
